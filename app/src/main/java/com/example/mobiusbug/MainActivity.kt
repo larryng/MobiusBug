@@ -15,6 +15,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.Disposables
 import io.reactivex.disposables.SerialDisposable
+import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
@@ -53,6 +54,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        RxJavaPlugins.setErrorHandler {
+            it.printStackTrace()
+        }
 
         val stream = Observable.interval(30, TimeUnit.MILLISECONDS, Schedulers.computation())
             .map { Event }
