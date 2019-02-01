@@ -28,7 +28,6 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var controller: MobiusLoop.Controller<Model, Event>
 
-    private var connectViewsDisposable = SerialDisposable()
     private var stopDisposables = CompositeDisposable()
     private var destroyDisposables = CompositeDisposable()
 
@@ -41,14 +40,16 @@ class MainActivity : AppCompatActivity() {
     private fun connectViews(
         models: Observable<Model>
     ): Observable<Event> {
-        connectViewsDisposable.set(
-            models
+
+        val disposable = models
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe { model ->
                     findViewById<TextView>(R.id.textView).text = model.count.toString()
                 }
-        )
-        return Observable.empty()
+
+        return Observable.empty<Event>()
+            .doOnDispose(disposable::dispose)
+
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,7 +101,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        connectViewsDisposable.set(Disposables.disposed())
         stopDisposables.clear()
         if (controller.isRunning) {
             controller.stop()
