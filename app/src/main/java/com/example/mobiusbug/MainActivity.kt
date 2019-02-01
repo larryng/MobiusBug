@@ -76,14 +76,12 @@ class MainActivity : AppCompatActivity() {
         controller.connect(RxConnectables.fromTransformer(this::connectViews))
         controller.start()
 
-        val randomObs = Observable.create<Any> { e ->
-            while (true) {
-                Thread.sleep(Random.nextLong(50, 100))
-                if (!e.isDisposed) {
-                    e.onNext(1)
-                }
+        val randomObs = Observable.fromCallable { Random.nextLong(50, 100) }
+            .repeat()
+            .concatMap {
+                Observable.just(1)
+                    .delay(it, TimeUnit.MILLISECONDS)
             }
-        }
 
         stopDisposables.add(
             randomObs
