@@ -12,8 +12,6 @@ import com.spotify.mobius.rx2.RxEventSources
 import com.spotify.mobius.rx2.RxMobius
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.disposables.Disposables
 import io.reactivex.disposables.SerialDisposable
 import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.schedulers.Schedulers
@@ -28,8 +26,8 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var controller: MobiusLoop.Controller<Model, Event>
 
-    private var stopDisposables = CompositeDisposable()
-    private var destroyDisposables = CompositeDisposable()
+    private var streamDisposable = SerialDisposable()
+    private var toggleDisposable = SerialDisposable()
 
     private val update: Update<Model, Event, Effect> =
         Update { model, _ -> next(model.copy(count = model.count + 1)) }
@@ -64,7 +62,7 @@ class MainActivity : AppCompatActivity() {
             .map { Event }
             .publish()
 
-        destroyDisposables.add(stream.connect())
+        streamDisposable.set(stream.connect())
 
         val loop = RxMobius.loop(update, effectHandler)
             .eventSource(RxEventSources.fromObservables(stream))
@@ -74,6 +72,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+
         controller.connect(RxConnectables.fromTransformer(this::connectViews))
         controller.start()
 
@@ -84,7 +83,7 @@ class MainActivity : AppCompatActivity() {
                     .delay(it, TimeUnit.MILLISECONDS)
             }
 
-        stopDisposables.add(
+        toggleDisposable.set(
             randomObs
                 .subscribeOn(Schedulers.single())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -101,16 +100,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        stopDisposables.clear()
+        toggleDisposable.dispose()
+        streamDisposable.dispose()
+
         if (controller.isRunning) {
             controller.stop()
             controller.disconnect()
         }
         super.onStop()
-    }
-
-    override fun onDestroy() {
-        destroyDisposables.clear()
-        super.onDestroy()
     }
 }
