@@ -10,11 +10,11 @@ import com.spotify.mobius.android.MobiusAndroid
 import com.spotify.mobius.rx2.RxConnectables
 import com.spotify.mobius.rx2.RxEventSources
 import com.spotify.mobius.rx2.RxMobius
+import io.reactivex.Flowable
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.disposables.Disposables
 import io.reactivex.disposables.SerialDisposable
+import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
@@ -27,9 +27,8 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var controller: MobiusLoop.Controller<Model, Event>
 
-    private var connectViewsDisposable = SerialDisposable()
-    private var stopDisposables = CompositeDisposable()
-    private var destroyDisposables = CompositeDisposable()
+    private var streamDisposable = SerialDisposable()
+    private var toggleDisposable = SerialDisposable()
 
     private val update: Update<Model, Event, Effect> =
         Update { model, _ -> next(model.copy(count = model.count + 1)) }
@@ -40,25 +39,31 @@ class MainActivity : AppCompatActivity() {
     private fun connectViews(
         models: Observable<Model>
     ): Observable<Event> {
-        connectViewsDisposable.set(
-            models
+
+        val disposable = models
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe { model ->
                     findViewById<TextView>(R.id.textView).text = model.count.toString()
                 }
-        )
-        return Observable.empty()
+
+        return Observable.empty<Event>()
+            .doOnDispose(disposable::dispose)
+
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        RxJavaPlugins.setErrorHandler {
+            it.printStackTrace()
+        }
+
         val stream = Observable.interval(30, TimeUnit.MILLISECONDS, Schedulers.computation())
             .map { Event }
             .publish()
 
-        destroyDisposables.add(stream.connect())
+        streamDisposable.set(stream.connect())
 
         val loop = RxMobius.loop(update, effectHandler)
             .eventSource(RxEventSources.fromObservables(stream))
@@ -68,19 +73,18 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+
         controller.connect(RxConnectables.fromTransformer(this::connectViews))
         controller.start()
 
-        val randomObs = Observable.create<Any> { e ->
-            while (true) {
-                Thread.sleep(Random.nextLong(50, 100))
-                if (!e.isDisposed) {
-                    e.onNext(1)
-                }
+        val randomObs = Flowable.fromCallable { Random.nextLong(50, 100) }
+            .repeat()
+            .concatMap {
+                Flowable.just(1)
+                    .delay(it, TimeUnit.MILLISECONDS)
             }
-        }
 
-        stopDisposables.add(
+        toggleDisposable.set(
             randomObs
                 .subscribeOn(Schedulers.single())
                 .observeOn(AndroidSchedulers.mainThread())
@@ -97,17 +101,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        connectViewsDisposable.set(Disposables.disposed())
-        stopDisposables.clear()
+        toggleDisposable.dispose()
+        streamDisposable.dispose()
+
         if (controller.isRunning) {
             controller.stop()
             controller.disconnect()
         }
         super.onStop()
-    }
-
-    override fun onDestroy() {
-        destroyDisposables.clear()
-        super.onDestroy()
     }
 }
