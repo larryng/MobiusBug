@@ -10,6 +10,7 @@ import com.spotify.mobius.android.MobiusAndroid
 import com.spotify.mobius.rx2.RxConnectables
 import com.spotify.mobius.rx2.RxEventSources
 import com.spotify.mobius.rx2.RxMobius
+import io.reactivex.Flowable
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.SerialDisposable
@@ -76,10 +77,10 @@ class MainActivity : AppCompatActivity() {
         controller.connect(RxConnectables.fromTransformer(this::connectViews))
         controller.start()
 
-        val randomObs = Observable.fromCallable { Random.nextLong(50, 100) }
+        val randomObs = Flowable.fromCallable { Random.nextLong(50, 100) }
             .repeat()
             .concatMap {
-                Observable.just(1)
+                Flowable.just(1)
                     .delay(it, TimeUnit.MILLISECONDS)
             }
 
